@@ -1,0 +1,170 @@
+<html>
+
+<head>
+    <style>
+        body {
+            background-color: lightgrey;
+            text-align: center;
+        }
+
+        #cycle-counter {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"><canvas id="screen" /></div>
+    <div id="cycle-counter"></div>
+    <script>
+        const CYCLE_TIME = 0.001 * 1000;
+        const ROWS = 449;
+        const COLS = 449;
+        const CELL_SIZE = 2;
+
+        const keepAlive = [2, 3];
+        const makeAlive = [3, 6, 7];
+
+        const canvas = document.getElementById('screen');
+        canvas.width = CELL_SIZE * COLS;
+        canvas.height = CELL_SIZE * ROWS;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = `rgba(0,0,0,1)`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const cycleCounter = document.getElementById('cycle-counter');
+
+        let gameCycles = 0;
+        let board = new Array(ROWS);
+        let changes = [];
+        let gameHearbeat;
+
+        // prerandomize numbers for performance
+        const randomLookupTable = [];
+        let randomIndex;
+        let R = 0;
+        let G = 0;
+        let B = 0;
+        let colorSwitch = 0;
+        for (randomIndex = 1e6 / 256; randomIndex > 0; randomIndex--) {
+            // randomLookupTable.push(Math.random() * 256 | 0);
+            for (let c = 0; c < 256; c++) {
+                randomLookupTable.push(R % 256);
+                randomLookupTable.push(G % 256);
+                randomLookupTable.push(B % 256);
+                if (colorSwitch % 3 === 0) {
+                    R++;
+                } else if (colorSwitch % 3 === 1) {
+                    G++;
+                } else if (colorSwitch % 3 === 2) {
+                    B++;
+                }
+            }
+            colorSwitch = Math.floor(Math.random() * 3);
+        }
+
+        function nextRandom() {
+            return ++randomIndex >= randomLookupTable.length ?
+                randomLookupTable[randomIndex = 0] : randomLookupTable[randomIndex];
+        }
+
+        for (let i = 0; i < ROWS; i++) {
+            board[i] = new Array(COLS);
+            for (let j = 0; j < COLS; j++) {
+                // board[i][j] = Math.floor(Math.random() * 100) % 2;
+                // board[i][j] = 0;
+                board[i][j] = ((i + j) % 2) ? 1 : 0;
+            }
+        }
+
+        function generateRandomColorPixel(canvasData, x, y) {
+            const colorValue = 1 * board[x][y];
+            const r = nextRandom() * colorValue;
+            const g = nextRandom() * colorValue;
+            const b = nextRandom() * colorValue;
+            const scaledX = x * CELL_SIZE;
+            const scaledY = y * CELL_SIZE;
+            for (let i = 0; i < CELL_SIZE; i++) {
+                for (let j = 0; j < CELL_SIZE; j++) {
+                    const pixelIndex = (scaledY + j + (scaledX + i) * canvas.width) * 4;
+                    canvasData.data[pixelIndex] = r;
+                    canvasData.data[pixelIndex + 1] = g;
+                    canvasData.data[pixelIndex + 2] = b;
+                }
+            }
+        }
+
+        function renderState() {
+            var canvasData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            changes.forEach(([x, y]) => {
+                board[x][y] = board[x][y] ? 0 : 1;
+                generateRandomColorPixel(canvasData, x, y);
+            });
+            ctx.putImageData(canvasData, 0, 0);
+            cycleCounter.innerHTML = gameCycles;
+        }
+
+        function countAliveNeighbors(x, y) {
+            let result = 0;
+            for (let i = -1; i < 2; i++) {
+                for (let j = -1; j < 2; j++) {
+                    if (i === 0 && j === 0) {
+                        continue;
+                    }
+                    const nX = x + i;
+                    const nY = y + j;
+                    if (nX < 0 || nX >= ROWS || nY < 0 || nY >= COLS) {
+                        continue;
+                    }
+                    result += board[nX][nY];
+                }
+            }
+            return result;
+        }
+
+        function conwayTransition() {
+            changes = [];
+            for (let i = 0; i < ROWS; i++) {
+                for (let j = 0; j < COLS; j++) {
+                    const aliveNeighbors = countAliveNeighbors(i, j);
+                    if (board[i][j]) {
+                        if (!keepAlive.includes(aliveNeighbors)) {
+                            changes.push([i, j]);
+                        }
+                    } else if (makeAlive.includes(aliveNeighbors)) {
+                        changes.push([i, j]);
+                    }
+                }
+            }
+        }
+
+        function tick() {
+            gameCycles++;
+            conwayTransition();
+            renderState();
+        }
+
+        function play() {
+            gameHearbeat = setInterval(function() {
+                tick();
+            }, CYCLE_TIME);
+        }
+
+        function pause() {
+            clearInterval(gameHearbeat);
+        }
+
+        renderState();
+        play();
+
+        // expose to console
+        const Game = {
+            play,
+            pause,
+            tick
+        }
+        window.Game = Game;
+    </script>
+</body>
+
+</html>
